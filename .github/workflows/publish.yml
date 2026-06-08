@@ -1,0 +1,79 @@
+name: Publish
+
+# Publishes the extension to the VS Code Marketplace AND the Open VSX Registry
+# (which is what Cursor, VSCodium, Windsurf and other VS Code forks install from),
+# then attaches the .vsix to a GitHub Release.
+#
+# Trigger: push a tag matching v*.*.* (e.g. `git tag v0.1.1 && git push --tags`).
+# The tag's version must match `version` in package.json.
+#
+# Required secrets:
+#   VSCE_PAT — Azure DevOps PAT with "Marketplace > Manage" + "All accessible
+#              organizations". Used for the VS Code Marketplace.
+#   OVSX_PAT — Open VSX access token (open-vsx.org → user → Access Tokens). Used
+#              for Open VSX / Cursor. If unset, the Open VSX step is skipped, so
+#              VS Code publishing keeps working until you add it.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    permissions:
+      contents: write     # needed to create the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build bundle
+        run: npm run build
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag $TAG_VERSION does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Resolve version for filename
+        id: ver
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Package VSIX
+        run: npx --yes @vscode/vsce package --out "azure-pipelines-inbox-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: Publish to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce publish --pat "$VSCE_PAT" --packagePath "azure-pipelines-inbox-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: Publish to Open VSX (Cursor, VSCodium, Windsurf, …)
+        if: ${{ env.OVSX_PAT != '' }}
+        run: |
+          npx --yes ovsx create-namespace danilocolombi -p "$OVSX_PAT" || true
+          npx --yes ovsx publish "azure-pipelines-inbox-${{ steps.ver.outputs.version }}.vsix" -p "$OVSX_PAT"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: azure-pipelines-inbox-*.vsix
+          generate_release_notes: true

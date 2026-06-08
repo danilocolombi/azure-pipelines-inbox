@@ -1,0 +1,360 @@
+{
+  "name": "azure-pipelines-inbox",
+  "displayName": "Azure Pipelines Inbox",
+  "description": "Watch your Azure DevOps pipeline runs live from VS Code's sidebar — timeline and logs as they happen.",
+  "version": "0.1.0",
+  "publisher": "danilocolombi",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "azure devops",
+    "azure pipelines",
+    "ci",
+    "builds",
+    "logs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/danilocolombi/azure-pipelines-inbox.git"
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "azurePipelines",
+          "title": "Azure Pipelines",
+          "icon": "media/azure-pipelines.svg"
+        }
+      ]
+    },
+    "views": {
+      "azurePipelines": [
+        {
+          "id": "azurePipelines.runs",
+          "name": "Runs"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "azurePipelines.runs",
+        "contents": "Sign in to your Azure DevOps organization to see your pipeline runs.\n[Sign in](command:azurePipelines.signIn)",
+        "when": "!azurePipelines.signedIn"
+      },
+      {
+        "view": "azurePipelines.runs",
+        "contents": "You're signed in but haven't subscribed to any projects yet.\n[Manage Subscriptions](command:azurePipelines.manageSubscriptions)",
+        "when": "azurePipelines.signedIn && azurePipelines.noSubscriptions"
+      }
+    ],
+    "commands": [
+      {
+        "command": "azurePipelines.signIn",
+        "title": "Sign In",
+        "category": "Azure Pipelines"
+      },
+      {
+        "command": "azurePipelines.signOut",
+        "title": "Sign Out",
+        "category": "Azure Pipelines"
+      },
+      {
+        "command": "azurePipelines.refresh",
+        "title": "Refresh",
+        "category": "Azure Pipelines",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "azurePipelines.expandAll",
+        "title": "Expand All",
+        "category": "Azure Pipelines",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "azurePipelines.collapseAll",
+        "title": "Collapse All",
+        "category": "Azure Pipelines",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "azurePipelines.manageSubscriptions",
+        "title": "Manage Subscriptions",
+        "category": "Azure Pipelines",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "azurePipelines.toggleOnlyMine",
+        "title": "Show All Runs",
+        "category": "Azure Pipelines",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "azurePipelines.toggleOnlyMineOff",
+        "title": "Show Only My Runs",
+        "category": "Azure Pipelines",
+        "icon": "$(account)"
+      },
+      {
+        "command": "azurePipelines.setStatusFilter",
+        "title": "Filter by Status",
+        "category": "Azure Pipelines",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "azurePipelines.viewLogs",
+        "title": "View Logs",
+        "category": "Azure Pipelines",
+        "icon": "$(output)"
+      },
+      {
+        "command": "azurePipelines.openInBrowser",
+        "title": "Open in Azure DevOps",
+        "category": "Azure Pipelines",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "azurePipelines.copyRunUrl",
+        "title": "Copy Run URL",
+        "category": "Azure Pipelines"
+      },
+      {
+        "command": "azurePipelines.cancelRun",
+        "title": "Cancel Run",
+        "category": "Azure Pipelines",
+        "icon": "$(stop-circle)"
+      },
+      {
+        "command": "azurePipelines.reRun",
+        "title": "Re-run Pipeline",
+        "category": "Azure Pipelines",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "azurePipelines.enableActions",
+        "title": "Enable Run Actions (Cancel / Re-run)",
+        "category": "Azure Pipelines"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "azurePipelines.refresh",
+          "when": "view == azurePipelines.runs",
+          "group": "navigation@0"
+        },
+        {
+          "command": "azurePipelines.toggleOnlyMine",
+          "when": "view == azurePipelines.runs && azurePipelines.onlyMyRuns",
+          "group": "navigation@1"
+        },
+        {
+          "command": "azurePipelines.toggleOnlyMineOff",
+          "when": "view == azurePipelines.runs && !azurePipelines.onlyMyRuns",
+          "group": "navigation@1"
+        },
+        {
+          "command": "azurePipelines.setStatusFilter",
+          "when": "view == azurePipelines.runs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "azurePipelines.expandAll",
+          "when": "view == azurePipelines.runs && !azurePipelines.treeExpanded",
+          "group": "navigation@3"
+        },
+        {
+          "command": "azurePipelines.collapseAll",
+          "when": "view == azurePipelines.runs && azurePipelines.treeExpanded",
+          "group": "navigation@3"
+        },
+        {
+          "command": "azurePipelines.manageSubscriptions",
+          "when": "view == azurePipelines.runs",
+          "group": "1_config@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "azurePipelines.viewLogs",
+          "when": "view == azurePipelines.runs && viewItem == timelineRecord.log",
+          "group": "inline@0"
+        },
+        {
+          "command": "azurePipelines.cancelRun",
+          "when": "view == azurePipelines.runs && viewItem == run.active && azurePipelines.actionsEnabled",
+          "group": "inline@0"
+        },
+        {
+          "command": "azurePipelines.reRun",
+          "when": "view == azurePipelines.runs && viewItem =~ /^run/ && azurePipelines.actionsEnabled",
+          "group": "inline@1"
+        },
+        {
+          "command": "azurePipelines.openInBrowser",
+          "when": "view == azurePipelines.runs && viewItem =~ /^run/",
+          "group": "inline@2"
+        },
+        {
+          "command": "azurePipelines.viewLogs",
+          "when": "view == azurePipelines.runs && viewItem == timelineRecord.log",
+          "group": "navigation@0"
+        },
+        {
+          "command": "azurePipelines.cancelRun",
+          "when": "view == azurePipelines.runs && viewItem == run.active && azurePipelines.actionsEnabled",
+          "group": "navigation@0"
+        },
+        {
+          "command": "azurePipelines.reRun",
+          "when": "view == azurePipelines.runs && viewItem =~ /^run/ && azurePipelines.actionsEnabled",
+          "group": "navigation@1"
+        },
+        {
+          "command": "azurePipelines.openInBrowser",
+          "when": "view == azurePipelines.runs && viewItem =~ /^run/",
+          "group": "1_copy@0"
+        },
+        {
+          "command": "azurePipelines.copyRunUrl",
+          "when": "view == azurePipelines.runs && viewItem =~ /^run/",
+          "group": "1_copy@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "azurePipelines.toggleOnlyMineOff",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.viewLogs",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.openInBrowser",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.copyRunUrl",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.cancelRun",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.reRun",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Azure Pipelines",
+      "properties": {
+        "azurePipelines.organizationUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Azure DevOps organization URL (e.g. https://dev.azure.com/contoso).",
+          "scope": "application"
+        },
+        "azurePipelines.subscriptions": {
+          "type": "array",
+          "default": [],
+          "description": "Projects you're subscribed to, with display order. Managed via the 'Manage Subscriptions' command.",
+          "scope": "application",
+          "items": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string"
+              },
+              "projectName": {
+                "type": "string"
+              },
+              "order": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "projectId",
+              "projectName",
+              "order"
+            ]
+          }
+        },
+        "azurePipelines.onlyMyRuns": {
+          "type": "boolean",
+          "default": false,
+          "description": "Only show runs that you triggered.",
+          "scope": "application"
+        },
+        "azurePipelines.statusFilter": {
+          "type": "string",
+          "default": "all",
+          "enum": [
+            "all",
+            "inProgress",
+            "completed"
+          ],
+          "enumDescriptions": [
+            "Show runs in any status.",
+            "Show only runs that are currently in progress.",
+            "Show only completed runs."
+          ],
+          "description": "Which run statuses to list.",
+          "scope": "application"
+        },
+        "azurePipelines.branchFilter": {
+          "type": "string",
+          "default": "",
+          "description": "Only show runs for this branch (e.g. main or refs/heads/main). Leave empty for all branches.",
+          "scope": "application"
+        },
+        "azurePipelines.runsTop": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "description": "Maximum number of runs to list per project.",
+          "scope": "application"
+        },
+        "azurePipelines.pollSeconds": {
+          "type": "number",
+          "default": 4,
+          "minimum": 2,
+          "description": "How often (in seconds) to poll in-progress runs and tailing logs for updates.",
+          "scope": "application"
+        },
+        "azurePipelines.enableActions": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Allow cancelling and re-running pipelines from the Runs view. Off by default so the extension only needs a read-only token. Enabling it prompts for a Personal Access Token with **Build (Read & Execute)**.",
+          "scope": "application"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "compile": "tsc --noEmit",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "azure-devops-node-api": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0"
+  }
+}
