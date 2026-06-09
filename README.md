@@ -4,6 +4,8 @@ Watch your Azure DevOps **pipeline runs live** from VS Code's sidebar — the ti
 jobs → tasks) and logs update as the run executes. A companion to
 [Azure Boards Inbox](https://marketplace.visualstudio.com/items?itemName=danilocolombi.azure-boards-inbox).
 
+![The runs inbox with a live Stage → Job → Task timeline expanded and a step's log tailing alongside it.](media/screenshot-timeline.png)
+
 ## Features
 
 - **Runs inbox** — a tree of recent runs per subscribed project, with status icons that update in place.
@@ -11,10 +13,41 @@ jobs → tasks) and logs update as the run executes. A companion to
   pass/fail as they finish.
 - **Live log tail** — open the logs for any step in a rich panel that appends new lines while the step runs,
   with `##[error]` / `##[warning]` / `##[section]` highlighting.
-- **Filters** — only my runs, status (all / in progress / completed), and branch.
-- **Run actions** *(opt-in)* — cancel and re-run pipelines once you enable a write-scoped token.
+- **Jump to first error** — on a failed run, one click (the 🐛 button or **View First Error**) opens the
+  first failed step's log scrolled straight to the error.
+- **Copy for AI** — copy a step's log straight into your AI chat (Cursor, Copilot, Claude, ChatGPT). It adds a
+  short context header (pipeline, step, result, branch, link) and, for long logs, trims to the errors plus
+  surrounding context so the important part fits the model's window. A plain **Copy log** is there too.
+- **Pipelines view** — a second tree listing every pipeline in your subscribed projects, for browsing and
+  running them directly (see **Run actions**).
+- **Filters** — only my runs, status (all / succeeded / failed), and branch.
+- **Run actions** — **Run** a pipeline (▶ on each pipeline in the Pipelines view, with a branch
+  prompt), **cancel** an in-progress run, **re-run** a whole pipeline, or **re-run just the failed jobs**
+  of a failed run. The first time you use one, it walks you through a one-time write-token setup; until
+  then your sign-in stays read-only.
+- **Notifications** — an optional toast when a tracked run finishes; on failure it links straight to the
+  errors. Defaults to runs you triggered (configurable — see `notifyOnComplete`).
+- **Status bar** — a `▶ N running` / `✖ N failed` summary while the sidebar is closed; click it to jump to
+  the inbox. The failed count clears once you open the Runs view.
 
 It polls only while something is in progress, then goes idle.
+
+## Screenshots
+
+The screenshot above shows a run's live timeline — stages, jobs and tasks update in place, spinning
+while in progress and flipping to pass/fail as they finish.
+
+The tailing log panel, with `##[error]` / `##[warning]` highlighting and the **Copy for AI** /
+**Copy log** actions:
+
+![A step's log tailing in the panel, errors in red and warnings in yellow, with Copy for AI and Copy log buttons in the header.](media/screenshot-logs.png)
+
+## Install
+
+Search **Azure Pipelines Inbox** in the Extensions view. It's published to both the
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=danilocolombi.azure-pipelines-inbox)
+and [Open VSX](https://open-vsx.org/extension/danilocolombi/azure-pipelines-inbox), so it installs in
+VS Code as well as Cursor, VSCodium, and Windsurf.
 
 ## Getting started
 
@@ -30,17 +63,29 @@ It polls only while something is in progress, then goes idle.
 | `azurePipelines.organizationUrl` | `""` | Azure DevOps organization URL. |
 | `azurePipelines.subscriptions` | `[]` | Subscribed projects (managed via Manage Subscriptions). |
 | `azurePipelines.onlyMyRuns` | `false` | Only show runs you triggered. |
-| `azurePipelines.statusFilter` | `all` | `all` / `inProgress` / `completed`. |
+| `azurePipelines.statusFilter` | `all` | `all` / `succeeded` / `failed`. |
 | `azurePipelines.branchFilter` | `""` | Only show runs for this branch. |
 | `azurePipelines.runsTop` | `25` | Max runs listed per project. |
 | `azurePipelines.pollSeconds` | `4` | Poll interval (seconds) for in-progress runs and tailing logs. |
+| `azurePipelines.notifyOnComplete` | `mine` | Notify when a tracked run finishes: `off` / `mine` / `all`. |
 | `azurePipelines.enableActions` | `false` | Enable Cancel / Re-run (prompts for a Build Read & Execute PAT). |
 
-## Run actions (cancel / re-run)
+## Run actions (run / cancel / re-run)
 
-These are off by default so the extension only needs a read-only token. Run
-**Azure Pipelines: Enable Run Actions** to provide a PAT with **Build (Read & Execute)**; the
-context-menu actions then appear on each run.
+The action buttons are always visible, but the extension stays **read-only by default**: the first time
+you trigger one, it asks for a Personal Access Token with **Build (Read & Execute)** (a one-time setup —
+this token is a superset of read, so your existing read features keep working). Cancel out and nothing
+changes. You can also do this up front via **Azure Pipelines: Enable Run Actions**.
+
+The actions:
+
+- **Run Pipeline** — the ▶ button on each pipeline in the Pipelines view; prompts for a branch (leave it
+  empty to run the pipeline's default branch).
+- **Cancel Run** — on an in-progress run.
+- **Re-run Pipeline** — queues a fresh run of the whole pipeline.
+- **Re-run Failed Jobs** — on a failed run; retries only the failed stages in place (the same run goes
+  back to in-progress), like the Azure DevOps web UI's "Rerun failed jobs". Pipelines without stages
+  (classic builds) fall back to a full re-run.
 
 ## How "live" works
 
@@ -61,5 +106,5 @@ npm run lint
 
 Press **F5** to launch the Extension Development Host.
 
-> Note: add a 128×128 `media/icon.png` and reference it via the `icon` field in `package.json` before
-> publishing to the Marketplace.
+The Marketplace icon (`media/icon.png`) is generated from `scripts/gen-icon.js` — run
+`node scripts/gen-icon.js` to regenerate it after tweaking the design.

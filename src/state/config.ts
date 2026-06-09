@@ -8,7 +8,10 @@ export interface Subscription {
   order: number;
 }
 
-export type StatusFilter = 'all' | 'inProgress' | 'completed';
+export type StatusFilter = 'all' | 'succeeded' | 'failed';
+
+/** Whose finished runs to surface a desktop notification for. */
+export type NotifyMode = 'off' | 'mine' | 'all';
 
 function cfg() {
   return vscode.workspace.getConfiguration(SECTION);
@@ -42,7 +45,7 @@ export async function setOnlyMyRuns(v: boolean): Promise<void> {
 
 export function getStatusFilter(): StatusFilter {
   const v = cfg().get<string>('statusFilter') ?? 'all';
-  return v === 'inProgress' || v === 'completed' ? v : 'all';
+  return v === 'succeeded' || v === 'failed' ? v : 'all';
 }
 
 export async function setStatusFilter(v: StatusFilter): Promise<void> {
@@ -56,6 +59,11 @@ export function getBranchFilter(): string {
 export function getRunsTop(): number {
   const n = cfg().get<number>('runsTop') ?? 25;
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 25;
+}
+
+export function getNotifyMode(): NotifyMode {
+  const v = cfg().get<string>('notifyOnComplete') ?? 'mine';
+  return v === 'off' || v === 'all' ? v : 'mine';
 }
 
 export function getPollSeconds(): number {

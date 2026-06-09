@@ -3,19 +3,31 @@ import { LogPanel } from '../view/logPanel';
 import { RunsTreeProvider } from '../view/runsTreeProvider';
 
 /**
- * Drives the single polling interval. It runs only while something is in progress —
- * an active run in the tree or an open, tailing log — and stops itself once everything
- * is idle. Re-arm it via `ensureRunning()` whenever new activity might exist (after a
- * refresh, on tree expansion, or when a log opens).
+ * Drives the single polling interval. It runs while something is in progress — an active
+ * run in the tree or an open, tailing log — and also while the Runs view is visible, so
+ * runs started elsewhere show up on their own. It stops itself once everything is idle and
+ * the view is hidden. Re-arm it via `ensureRunning()` whenever new activity might exist
+ * (after a refresh, on tree expansion, or when a log opens).
  */
 export class PollController {
   private timer?: NodeJS.Timeout;
   private ticking = false;
+  private visible = false;
 
   constructor(
     private readonly provider: RunsTreeProvider,
     private readonly logPanel: LogPanel
   ) {}
+
+  /** Track Runs-view visibility; while visible, keep polling to discover new runs. */
+  setVisible(visible: boolean): void {
+    if (this.visible === visible) return;
+    this.visible = visible;
+    if (visible) {
+      this.ensureRunning();
+      void this.tick(); // refresh now, even if the timer was already ticking
+    }
+  }
 
   ensureRunning(): void {
     if (this.timer) return;
@@ -42,9 +54,10 @@ export class PollController {
     if (this.ticking) return;
     this.ticking = true;
     try {
+      if (this.visible) await this.provider.refreshRunList();
       const runsActive = await this.provider.pollActiveRuns();
       const logActive = await this.logPanel.pollAppend();
-      if (!runsActive && !logActive) this.stop();
+      if (!runsActive && !logActive && !this.visible) this.stop();
     } catch {
       // Swallow transient errors; keep the loop alive for the next tick.
     } finally {

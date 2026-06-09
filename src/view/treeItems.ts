@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import {
   Build,
+  BuildDefinitionReference,
   BuildResult,
   BuildStatus,
   TaskResult,
@@ -10,7 +11,7 @@ import {
 import { isActiveStatus } from '../azure/builds';
 import { Subscription } from '../state/config';
 
-export type Node = ProjectNode | RunNode | TimelineRecordNode | MessageNode;
+export type Node = ProjectNode | PipelineNode | RunNode | TimelineRecordNode | MessageNode;
 
 export class ProjectNode extends vscode.TreeItem {
   readonly kind = 'project' as const;
@@ -23,6 +24,35 @@ export class ProjectNode extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon('project');
     this.id = `project:${subscription.projectId}`;
     if (typeof count === 'number') this.description = `${count}`;
+  }
+}
+
+export class PipelineNode extends vscode.TreeItem {
+  readonly kind = 'pipeline' as const;
+  readonly definitionId: number;
+  readonly url: string;
+
+  constructor(
+    public readonly projectName: string,
+    public readonly definition: BuildDefinitionReference,
+    orgUrl: string
+  ) {
+    super(definition.name ?? 'Pipeline', vscode.TreeItemCollapsibleState.Collapsed);
+    this.definitionId = definition.id ?? 0;
+    this.id = `pipeline:${projectName}:${this.definitionId}`;
+    this.contextValue = 'pipeline';
+    this.url = `${orgUrl}/${encodeURIComponent(projectName)}/_build?definitionId=${this.definitionId}`;
+
+    // `latestBuild` comes back inline from getDefinitions(includeLatestBuilds), so the
+    // last-run status is shown without an extra request per pipeline.
+    const latest = definition.latestBuild;
+    this.iconPath = latest
+      ? runIcon(latest)
+      : new vscode.ThemeIcon('circle-outline', color('disabledForeground'));
+    this.description = latest ? runStatusLabel(latest) : 'no runs yet';
+    const tip = [definition.name ?? 'Pipeline'];
+    if (latest) tip.push(runStatusLabel(latest));
+    this.tooltip = new vscode.MarkdownString(tip.join('\n\n'));
   }
 }
 
@@ -58,7 +88,11 @@ export class RunNode extends vscode.TreeItem {
     const branch = shortenBranch(b.sourceBranch);
     this.description = branch ? `${runStatusLabel(b)} · ${branch}` : runStatusLabel(b);
     this.iconPath = runIcon(b);
-    this.contextValue = isActiveStatus(b.status) ? 'run.active' : 'run';
+    this.contextValue = isActiveStatus(b.status)
+      ? 'run.active'
+      : b.result === BuildResult.Failed
+        ? 'run.failed'
+        : 'run';
     this.url = `${this.orgUrl}/${encodeURIComponent(this.projectName)}/_build/results?buildId=${b.id}`;
 
     const tip: string[] = [`${defName} #${number}`, runStatusLabel(b)];
@@ -87,16 +121,16 @@ export class TimelineRecordNode extends vscode.TreeItem {
     this.iconPath = recordIcon(record);
     this.description = recordDescription(record);
 
-    const logId = record.log?.id;
-    if (typeof logId === 'number') {
-      this.contextValue = 'timelineRecord.log';
+    const hasLog = typeof record.log?.id === 'number';
+    this.contextValue = hasLog ? 'timelineRecord.log' : 'timelineRecord';
+    // Leaf steps open the log view on click even before a log exists, so the panel
+    // can explain why (pending / waiting for output) instead of the click doing nothing.
+    if (hasLog || !hasChildren) {
       this.command = {
         command: 'azurePipelines.viewLogs',
         title: 'View Logs',
         arguments: [this]
       };
-    } else {
-      this.contextValue = 'timelineRecord';
     }
   }
 }
@@ -237,7 +271,7 @@ function recordDescription(r: TimelineRecord): string {
   return parts.join(' · ');
 }
 
-function shortenBranch(ref: string | undefined): string {
+export function shortenBranch(ref: string | undefined): string {
   if (!ref) return '';
   if (ref.startsWith('refs/heads/')) return ref.slice('refs/heads/'.length);
   if (ref.startsWith('refs/tags/')) return `tag:${ref.slice('refs/tags/'.length)}`;

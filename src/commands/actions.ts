@@ -11,8 +11,9 @@ import { setActionsEnabled } from '../state/config';
  */
 export async function enableActions(auth: AuthService, client: AzureClient): Promise<boolean> {
   const choice = await vscode.window.showInformationMessage(
-    'Cancelling and re-running pipelines requires a Personal Access Token with Build (Read & Execute). ' +
-      'Your sign-in token is read-only by default. Update it now to enable run actions?',
+    'Running, cancelling, and re-running pipelines needs a Personal Access Token with Build ' +
+      '(Read & Execute). Your sign-in token is read-only by default. This is a one-time setup — ' +
+      'update your token now to enable these actions?',
     { modal: true },
     'Update Token'
   );

@@ -1,18 +1,24 @@
 import * as vscode from 'vscode';
+import { BuildResult } from 'azure-devops-node-api/interfaces/BuildInterfaces';
 import { AuthService } from './auth/authService';
-import { resetUserCache } from './azure/builds';
+import { firstFailedLeaf, getMyId, getTimeline, resetUserCache } from './azure/builds';
 import { AzureClient } from './azure/client';
 import { enableActions } from './commands/actions';
+import { copyLog } from './commands/copyLog';
 import {
   cancelRunCommand,
   copyRunUrl,
+  openPipelineInBrowser,
   openRunInBrowser,
-  reRunCommand
+  reRunCommand,
+  reRunFailedCommand,
+  runPipelineCommand
 } from './commands/runActions';
 import { manageSubscriptions } from './commands/subscriptions';
 import { PollController } from './poll/pollController';
 import {
   getActionsEnabled,
+  getNotifyMode,
   getOnlyMyRuns,
   getStatusFilter,
   getSubscriptions,
@@ -21,13 +27,15 @@ import {
   StatusFilter
 } from './state/config';
 import { LogPanel } from './view/logPanel';
+import { PipelinesTreeProvider } from './view/pipelinesTreeProvider';
 import { RunsTreeProvider } from './view/runsTreeProvider';
-import { TimelineRecordNode } from './view/treeItems';
+import { RunNode, TimelineRecordNode } from './view/treeItems';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const auth = new AuthService(context.secrets);
   const client = new AzureClient(auth);
   const provider = new RunsTreeProvider(client);
+  const pipelinesProvider = new PipelinesTreeProvider(client);
   const logPanel = new LogPanel(client);
   const poll = new PollController(provider, logPanel);
   context.subscriptions.push({
@@ -43,6 +51,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     canSelectMany: false
   });
   context.subscriptions.push(view);
+
+  // Runs that finished as failed since the inbox was last looked at — the "unread" count on
+  // the status bar. Cleared when the user opens the Runs view (classic inbox semantics).
+  const unreadFailures = new Set<number>();
+
+  // While the Runs view is visible, keep polling so runs started elsewhere appear on their own.
+  poll.setVisible(view.visible);
+  context.subscriptions.push(
+    view.onDidChangeVisibility((e) => {
+      poll.setVisible(e.visible);
+      if (e.visible && unreadFailures.size > 0) {
+        unreadFailures.clear();
+        void updateStatusBar();
+      }
+    })
+  );
+
+  const pipelinesView = vscode.window.createTreeView('azurePipelines.pipelines', {
+    treeDataProvider: pipelinesProvider,
+    showCollapseAll: true,
+    canSelectMany: false
+  });
+  context.subscriptions.push(pipelinesView);
 
   const setExpandedContext = (expanded: boolean) =>
     vscode.commands.executeCommand('setContext', 'azurePipelines.treeExpanded', expanded);
@@ -66,15 +97,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return;
     }
     const running = provider.getRunningCount();
-    if (running > 0) {
-      statusBar.text = `$(sync~spin) ${running} running`;
-      statusBar.tooltip = `${running} pipeline run${running > 1 ? 's' : ''} in progress`;
-      statusBar.show();
-      view.badge = { value: running, tooltip: `${running} running` };
-    } else {
+    const failed = unreadFailures.size;
+    if (running === 0 && failed === 0) {
       statusBar.hide();
       view.badge = undefined;
+      return;
     }
+    const text: string[] = [];
+    const tip: string[] = [];
+    if (running > 0) {
+      text.push(`$(sync~spin) ${running} running`);
+      tip.push(`${running} pipeline run${running > 1 ? 's' : ''} in progress`);
+    }
+    if (failed > 0) {
+      text.push(`$(error) ${failed} failed`);
+      tip.push(`${failed} run${failed > 1 ? 's' : ''} failed since you last opened the inbox`);
+    }
+    statusBar.text = text.join(' · ');
+    statusBar.tooltip = tip.join('\n');
+    statusBar.backgroundColor =
+      failed > 0 ? new vscode.ThemeColor('statusBarItem.errorBackground') : undefined;
+    statusBar.show();
+    // Surface the thing that needs attention: failures take the badge over a running count.
+    view.badge =
+      failed > 0
+        ? { value: failed, tooltip: `${failed} failed` }
+        : { value: running, tooltip: `${running} running` };
   };
 
   context.subscriptions.push(
@@ -84,9 +132,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  const refreshAllTrees = () => {
+    provider.refresh();
+    pipelinesProvider.refresh();
+  };
+
   const refreshContext = async () => {
     const signedIn = await auth.isSignedIn();
     provider.setSignedIn(signedIn);
+    pipelinesProvider.setSignedIn(signedIn);
     await vscode.commands.executeCommand('setContext', 'azurePipelines.signedIn', signedIn);
     await vscode.commands.executeCommand(
       'setContext',
@@ -102,6 +156,82 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await updateStatusBar();
   };
 
+  // First-use gate for write actions (run / cancel / re-run). The buttons are always visible
+  // for discoverability; the first time one is used we walk the user through providing a
+  // write-scoped PAT, then continue. This keeps the default sign-in token read-only.
+  const ensureActions = async (): Promise<boolean> => {
+    if (getActionsEnabled()) return true;
+    const ok = await enableActions(auth, client);
+    if (ok) await refreshContext();
+    return ok;
+  };
+
+  // Open the first failed step of a run and jump straight to the error in its log.
+  const openFirstError = async (node: RunNode): Promise<void> => {
+    try {
+      const timeline = await getTimeline(client, node.projectName, node.buildId);
+      const failed = firstFailedLeaf(timeline?.records ?? []);
+      if (!failed) {
+        void vscode.window.showInformationMessage(
+          'Azure Pipelines: no failed step found for this run.'
+        );
+        return;
+      }
+      await logPanel.show(new TimelineRecordNode(node.projectName, node.buildId, failed, false), {
+        revealError: true
+      });
+      poll.ensureRunning();
+    } catch {
+      void vscode.window.showErrorMessage('Azure Pipelines: could not open the failed step.');
+    }
+  };
+
+  // Toast when a tracked run finishes. `mine` (default) filters to runs you triggered.
+  const notifyRunComplete = async (node: RunNode): Promise<void> => {
+    const mode = getNotifyMode();
+    if (mode === 'off') return;
+    if (mode === 'mine') {
+      const myId = await getMyId(client);
+      if (!myId || node.build.requestedFor?.id !== myId) return;
+    }
+    const b = node.build;
+    const name = `${b.definition?.name ?? 'Pipeline'} #${b.buildNumber ?? b.id}`;
+    if (b.result === BuildResult.Failed) {
+      const choice = await vscode.window.showErrorMessage(
+        `${name} failed`,
+        'View Errors',
+        'Open in Azure DevOps'
+      );
+      if (choice === 'View Errors') await openFirstError(node);
+      else if (choice === 'Open in Azure DevOps') await openRunInBrowser(node);
+      return;
+    }
+    const verb =
+      b.result === BuildResult.Succeeded
+        ? 'succeeded'
+        : b.result === BuildResult.PartiallySucceeded
+          ? 'partially succeeded'
+          : b.result === BuildResult.Canceled
+            ? 'was canceled'
+            : 'finished';
+    const choice = await vscode.window.showInformationMessage(
+      `${name} ${verb}`,
+      'Open in Azure DevOps'
+    );
+    if (choice === 'Open in Azure DevOps') await openRunInBrowser(node);
+  };
+
+  context.subscriptions.push(
+    provider.onDidCompleteRun((node) => {
+      // Count a fresh failure on the status bar unless the inbox is already in view.
+      if (node.build.result === BuildResult.Failed && !view.visible) {
+        unreadFailures.add(node.buildId);
+        void updateStatusBar();
+      }
+      void notifyRunComplete(node);
+    })
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand('azurePipelines.signIn', async () => {
       const ok = await auth.promptSignIn();
@@ -109,7 +239,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         client.invalidate();
         resetUserCache();
         await refreshContext();
-        provider.refresh();
+        refreshAllTrees();
         vscode.window.showInformationMessage('Azure Pipelines: signed in.');
       }
     }),
@@ -119,13 +249,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       client.invalidate();
       resetUserCache();
       await refreshContext();
-      provider.refresh();
+      refreshAllTrees();
       vscode.window.showInformationMessage('Azure Pipelines: signed out.');
     }),
 
     vscode.commands.registerCommand('azurePipelines.refresh', async () => {
       await refreshContext();
-      provider.refresh();
+      refreshAllTrees();
     }),
 
     vscode.commands.registerCommand('azurePipelines.expandAll', async () => {
@@ -154,7 +284,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       await manageSubscriptions(client);
       await refreshContext();
-      provider.refresh();
+      refreshAllTrees();
     }),
 
     vscode.commands.registerCommand('azurePipelines.toggleOnlyMine', async () => {
@@ -172,8 +302,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const current = getStatusFilter();
       const options: { label: string; value: StatusFilter }[] = [
         { label: 'All', value: 'all' },
-        { label: 'In progress', value: 'inProgress' },
-        { label: 'Completed', value: 'completed' }
+        { label: 'Succeeded', value: 'succeeded' },
+        { label: 'Failed', value: 'failed' }
       ];
       const picked = await vscode.window.showQuickPick(
         options.map((o) => ({ label: o.label, description: o.value === current ? '(current)' : '', value: o.value })),
@@ -192,17 +322,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
 
+    vscode.commands.registerCommand('azurePipelines.viewFirstError', async (node) => {
+      if (node instanceof RunNode) await openFirstError(node);
+    }),
+
     vscode.commands.registerCommand('azurePipelines.openInBrowser', openRunInBrowser),
+    vscode.commands.registerCommand('azurePipelines.openPipelineInBrowser', openPipelineInBrowser),
     vscode.commands.registerCommand('azurePipelines.copyRunUrl', copyRunUrl),
 
+    vscode.commands.registerCommand('azurePipelines.copyLogForAI', (node) =>
+      copyLog(client, node, 'ai')
+    ),
+    vscode.commands.registerCommand('azurePipelines.copyLog', (node) =>
+      copyLog(client, node, 'plain')
+    ),
+
     vscode.commands.registerCommand('azurePipelines.cancelRun', async (node) => {
+      if (!(await ensureActions())) return;
       if (await cancelRunCommand(client, node)) {
         provider.refresh();
       }
     }),
     vscode.commands.registerCommand('azurePipelines.reRun', async (node) => {
+      if (!(await ensureActions())) return;
       if (await reRunCommand(client, node)) {
         provider.refresh();
+      }
+    }),
+    vscode.commands.registerCommand('azurePipelines.reRunFailed', async (node) => {
+      if (!(await ensureActions())) return;
+      if (await reRunFailedCommand(client, node)) {
+        refreshAllTrees();
+        poll.ensureRunning();
+      }
+    }),
+    vscode.commands.registerCommand('azurePipelines.runPipeline', async (node) => {
+      if (!(await ensureActions())) return;
+      if (await runPipelineCommand(client, node)) {
+        refreshAllTrees();
+        poll.ensureRunning();
       }
     }),
 
@@ -222,6 +380,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         e.affectsConfiguration('azurePipelines.runsTop')
       ) {
         provider.refresh();
+      }
+      // The catalog ignores the inbox filters; only subscriptions and history depth matter.
+      if (
+        e.affectsConfiguration('azurePipelines.subscriptions') ||
+        e.affectsConfiguration('azurePipelines.runsTop')
+      ) {
+        pipelinesProvider.refresh();
       }
     })
   );

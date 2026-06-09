@@ -3,14 +3,8 @@ import { TimelineRecord } from 'azure-devops-node-api/interfaces/BuildInterfaces
 import { AzureClient, isUnauthorized } from '../azure/client';
 import { getRun, getTimeline, isActiveStatus, listRuns } from '../azure/builds';
 import { getOrganizationUrl, getSubscriptions, Subscription } from '../state/config';
-import {
-  childRecords,
-  MessageNode,
-  Node,
-  ProjectNode,
-  RunNode,
-  TimelineRecordNode
-} from './treeItems';
+import { MessageNode, Node, ProjectNode, RunNode, TimelineRecordNode } from './treeItems';
+import { loadRunChildren, recordChildren } from './timeline';
 
 interface ProjectEntry {
   loading: boolean;
@@ -26,6 +20,10 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
   /** Fires when the set/status of runs changes (status bar + poll lifecycle). */
   private readonly _onDidChangeRuns = new vscode.EventEmitter<void>();
   readonly onDidChangeRuns = this._onDidChangeRuns.event;
+
+  /** Fires once per run the moment it transitions from active to finished (drives notifications). */
+  private readonly _onDidCompleteRun = new vscode.EventEmitter<RunNode>();
+  readonly onDidCompleteRun = this._onDidCompleteRun.event;
 
   private projectRuns = new Map<string, ProjectEntry>();
   private timelines = new Map<number, TimelineRecord[]>();
@@ -71,20 +69,10 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
       return this.getProjectRuns(element.subscription);
     }
     if (element instanceof RunNode) {
-      return this.getRunChildren(element);
+      return loadRunChildren(this.client, this.timelines, element);
     }
     if (element instanceof TimelineRecordNode) {
-      const records = this.timelines.get(element.buildId);
-      if (!records) return [];
-      return childRecords(records, element.record.id).map(
-        (r) =>
-          new TimelineRecordNode(
-            element.projectName,
-            element.buildId,
-            r,
-            childRecords(records, r.id).length > 0
-          )
-      );
+      return recordChildren(this.timelines, element);
     }
     return [];
   }
@@ -134,31 +122,43 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
     }
   }
 
-  private async getRunChildren(runNode: RunNode): Promise<Node[]> {
-    let records = this.timelines.get(runNode.buildId);
-    if (!records) {
+  /**
+   * Re-list runs for every already-loaded project and reconcile the result: keep existing
+   * run nodes (preserving their cached timeline + expansion state) by build id, add ones
+   * that appeared, and drop ones that fell off. This is what surfaces runs started outside
+   * the editor; the poll controller calls it each tick while the view is visible.
+   */
+  async refreshRunList(): Promise<void> {
+    if (!this.signedIn) return;
+    const orgUrl = getOrganizationUrl();
+    let changed = false;
+    for (const sub of getSubscriptions()) {
+      const entry = this.projectRuns.get(sub.projectId);
+      if (!entry?.runs) continue; // not loaded yet — the initial load will populate it
       try {
-        const timeline = await getTimeline(this.client, runNode.projectName, runNode.buildId);
-        records = timeline?.records ?? [];
-        this.timelines.set(runNode.buildId, records);
+        const builds = await listRuns(this.client, sub.projectName);
+        const existing = new Map(entry.runs.map((r) => [r.buildId, r]));
+        const next: RunNode[] = [];
+        for (const b of builds) {
+          if (typeof b.id !== 'number') continue;
+          const node = existing.get(b.id);
+          if (node) {
+            next.push(node);
+          } else {
+            next.push(new RunNode(sub.projectName, b, orgUrl));
+            changed = true;
+          }
+        }
+        if (next.length !== entry.runs.length) changed = true; // a run dropped off the top N
+        entry.runs = next;
       } catch {
-        return [new MessageNode('Could not load timeline', 'error')];
+        // transient; keep the current list and try again next tick
       }
     }
-    const roots = childRecords(records, undefined);
-    if (roots.length === 0) {
-      return [new MessageNode(isActiveStatus(runNode.build.status) ? 'Starting…' : '(no steps)', 'loading~spin')];
+    if (changed) {
+      this._onDidChangeTreeData.fire();
+      this._onDidChangeRuns.fire();
     }
-    const all = records;
-    return roots.map(
-      (r) =>
-        new TimelineRecordNode(
-          runNode.projectName,
-          runNode.buildId,
-          r,
-          childRecords(all, r.id).length > 0
-        )
-    );
   }
 
   /**
@@ -182,7 +182,10 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
             this.timelines.set(runNode.buildId, timeline?.records ?? []);
           }
           this._onDidChangeTreeData.fire(runNode);
+          // The loop only reaches active runs, so a now-inactive status is a fresh
+          // transition — fire exactly once (next tick the guard above skips it).
           if (isActiveStatus(fresh.status)) active = true;
+          else this._onDidCompleteRun.fire(runNode);
         } catch {
           // transient; try again next tick
         }

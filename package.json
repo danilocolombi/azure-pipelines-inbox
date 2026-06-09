@@ -4,6 +4,7 @@
   "description": "Watch your Azure DevOps pipeline runs live from VS Code's sidebar — timeline and logs as they happen.",
   "version": "0.1.0",
   "publisher": "danilocolombi",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -38,6 +39,10 @@
         {
           "id": "azurePipelines.runs",
           "name": "Runs"
+        },
+        {
+          "id": "azurePipelines.pipelines",
+          "name": "Pipelines"
         }
       ]
     },
@@ -49,6 +54,16 @@
       },
       {
         "view": "azurePipelines.runs",
+        "contents": "You're signed in but haven't subscribed to any projects yet.\n[Manage Subscriptions](command:azurePipelines.manageSubscriptions)",
+        "when": "azurePipelines.signedIn && azurePipelines.noSubscriptions"
+      },
+      {
+        "view": "azurePipelines.pipelines",
+        "contents": "Sign in to your Azure DevOps organization to browse your pipelines.\n[Sign in](command:azurePipelines.signIn)",
+        "when": "!azurePipelines.signedIn"
+      },
+      {
+        "view": "azurePipelines.pipelines",
         "contents": "You're signed in but haven't subscribed to any projects yet.\n[Manage Subscriptions](command:azurePipelines.manageSubscriptions)",
         "when": "azurePipelines.signedIn && azurePipelines.noSubscriptions"
       }
@@ -113,8 +128,20 @@
         "icon": "$(output)"
       },
       {
+        "command": "azurePipelines.viewFirstError",
+        "title": "View First Error",
+        "category": "Azure Pipelines",
+        "icon": "$(bug)"
+      },
+      {
         "command": "azurePipelines.openInBrowser",
         "title": "Open in Azure DevOps",
+        "category": "Azure Pipelines",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "azurePipelines.openPipelineInBrowser",
+        "title": "Open Pipeline in Azure DevOps",
         "category": "Azure Pipelines",
         "icon": "$(link-external)"
       },
@@ -122,6 +149,18 @@
         "command": "azurePipelines.copyRunUrl",
         "title": "Copy Run URL",
         "category": "Azure Pipelines"
+      },
+      {
+        "command": "azurePipelines.copyLogForAI",
+        "title": "Copy Log for AI",
+        "category": "Azure Pipelines",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "azurePipelines.copyLog",
+        "title": "Copy Log",
+        "category": "Azure Pipelines",
+        "icon": "$(copy)"
       },
       {
         "command": "azurePipelines.cancelRun",
@@ -134,6 +173,18 @@
         "title": "Re-run Pipeline",
         "category": "Azure Pipelines",
         "icon": "$(debug-restart)"
+      },
+      {
+        "command": "azurePipelines.reRunFailed",
+        "title": "Re-run Failed Jobs",
+        "category": "Azure Pipelines",
+        "icon": "$(run-errors)"
+      },
+      {
+        "command": "azurePipelines.runPipeline",
+        "title": "Run Pipeline",
+        "category": "Azure Pipelines",
+        "icon": "$(run)"
       },
       {
         "command": "azurePipelines.enableActions",
@@ -177,53 +228,113 @@
           "command": "azurePipelines.manageSubscriptions",
           "when": "view == azurePipelines.runs",
           "group": "1_config@1"
+        },
+        {
+          "command": "azurePipelines.refresh",
+          "when": "view == azurePipelines.pipelines",
+          "group": "navigation@0"
+        },
+        {
+          "command": "azurePipelines.manageSubscriptions",
+          "when": "view == azurePipelines.pipelines",
+          "group": "1_config@1"
         }
       ],
       "view/item/context": [
         {
           "command": "azurePipelines.viewLogs",
-          "when": "view == azurePipelines.runs && viewItem == timelineRecord.log",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == timelineRecord.log",
           "group": "inline@0"
         },
         {
           "command": "azurePipelines.cancelRun",
-          "when": "view == azurePipelines.runs && viewItem == run.active && azurePipelines.actionsEnabled",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == run.active",
           "group": "inline@0"
         },
         {
-          "command": "azurePipelines.reRun",
-          "when": "view == azurePipelines.runs && viewItem =~ /^run/ && azurePipelines.actionsEnabled",
+          "command": "azurePipelines.viewFirstError",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == run.failed",
+          "group": "inline@0"
+        },
+        {
+          "command": "azurePipelines.reRunFailed",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == run.failed",
           "group": "inline@1"
         },
         {
-          "command": "azurePipelines.openInBrowser",
-          "when": "view == azurePipelines.runs && viewItem =~ /^run/",
+          "command": "azurePipelines.reRun",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem =~ /^run/",
           "group": "inline@2"
         },
         {
-          "command": "azurePipelines.viewLogs",
-          "when": "view == azurePipelines.runs && viewItem == timelineRecord.log",
+          "command": "azurePipelines.openInBrowser",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem =~ /^run/",
+          "group": "inline@3"
+        },
+        {
+          "command": "azurePipelines.viewFirstError",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == run.failed",
           "group": "navigation@0"
         },
         {
+          "command": "azurePipelines.runPipeline",
+          "when": "view == azurePipelines.pipelines && viewItem == pipeline",
+          "group": "inline@0"
+        },
+        {
+          "command": "azurePipelines.openPipelineInBrowser",
+          "when": "view == azurePipelines.pipelines && viewItem == pipeline",
+          "group": "inline@1"
+        },
+        {
+          "command": "azurePipelines.viewLogs",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == timelineRecord.log",
+          "group": "navigation@0"
+        },
+        {
+          "command": "azurePipelines.copyLogForAI",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == timelineRecord.log",
+          "group": "navigation@1"
+        },
+        {
+          "command": "azurePipelines.copyLog",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == timelineRecord.log",
+          "group": "navigation@2"
+        },
+        {
           "command": "azurePipelines.cancelRun",
-          "when": "view == azurePipelines.runs && viewItem == run.active && azurePipelines.actionsEnabled",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == run.active",
           "group": "navigation@0"
         },
         {
           "command": "azurePipelines.reRun",
-          "when": "view == azurePipelines.runs && viewItem =~ /^run/ && azurePipelines.actionsEnabled",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem =~ /^run/",
           "group": "navigation@1"
         },
         {
+          "command": "azurePipelines.reRunFailed",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem == run.failed",
+          "group": "navigation@2"
+        },
+        {
+          "command": "azurePipelines.runPipeline",
+          "when": "view == azurePipelines.pipelines && viewItem == pipeline",
+          "group": "navigation@0"
+        },
+        {
           "command": "azurePipelines.openInBrowser",
-          "when": "view == azurePipelines.runs && viewItem =~ /^run/",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem =~ /^run/",
           "group": "1_copy@0"
         },
         {
           "command": "azurePipelines.copyRunUrl",
-          "when": "view == azurePipelines.runs && viewItem =~ /^run/",
+          "when": "(view == azurePipelines.runs || view == azurePipelines.pipelines) && viewItem =~ /^run/",
           "group": "1_copy@1"
+        },
+        {
+          "command": "azurePipelines.openPipelineInBrowser",
+          "when": "view == azurePipelines.pipelines && viewItem == pipeline",
+          "group": "1_copy@0"
         }
       ],
       "commandPalette": [
@@ -236,11 +347,27 @@
           "when": "false"
         },
         {
+          "command": "azurePipelines.viewFirstError",
+          "when": "false"
+        },
+        {
           "command": "azurePipelines.openInBrowser",
           "when": "false"
         },
         {
+          "command": "azurePipelines.openPipelineInBrowser",
+          "when": "false"
+        },
+        {
           "command": "azurePipelines.copyRunUrl",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.copyLogForAI",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.copyLog",
           "when": "false"
         },
         {
@@ -249,6 +376,14 @@
         },
         {
           "command": "azurePipelines.reRun",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.reRunFailed",
+          "when": "false"
+        },
+        {
+          "command": "azurePipelines.runPipeline",
           "when": "false"
         }
       ]
@@ -298,15 +433,15 @@
           "default": "all",
           "enum": [
             "all",
-            "inProgress",
-            "completed"
+            "succeeded",
+            "failed"
           ],
           "enumDescriptions": [
             "Show runs in any status.",
-            "Show only runs that are currently in progress.",
-            "Show only completed runs."
+            "Show only runs that succeeded.",
+            "Show only runs that failed."
           ],
-          "description": "Which run statuses to list.",
+          "description": "Which runs to list, by result.",
           "scope": "application"
         },
         "azurePipelines.branchFilter": {
@@ -332,7 +467,23 @@
         "azurePipelines.enableActions": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Allow cancelling and re-running pipelines from the Runs view. Off by default so the extension only needs a read-only token. Enabling it prompts for a Personal Access Token with **Build (Read & Execute)**.",
+          "markdownDescription": "Whether run actions (run / cancel / re-run) are enabled. Set automatically the first time you use one of those buttons — which prompts for a Personal Access Token with **Build (Read & Execute)**. Off by default so the extension only needs a read-only token.",
+          "scope": "application"
+        },
+        "azurePipelines.notifyOnComplete": {
+          "type": "string",
+          "default": "mine",
+          "enum": [
+            "off",
+            "mine",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Never notify when a run finishes.",
+            "Notify only when a run you triggered finishes.",
+            "Notify when any tracked run finishes."
+          ],
+          "description": "Show a notification when a tracked run finishes (with a shortcut to its first error on failure).",
           "scope": "application"
         }
       }
