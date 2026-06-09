@@ -1,8 +1,9 @@
 # Azure Pipelines Inbox
 
-Watch your Azure DevOps **pipeline runs live** from VS Code's sidebar — the timeline (stages →
-jobs → tasks) and logs update as the run executes. A companion to
-[Azure Boards Inbox](https://marketplace.visualstudio.com/items?itemName=danilocolombi.azure-boards-inbox).
+Monitor your Azure DevOps **pipeline runs live from VS Code's sidebar**, without switching to
+the browser — the Stage → Job → Task timeline and logs update in real time, and a notification
+tells you when a run finishes. When a build fails, jump straight to the first error and copy it,
+trimmed and with context, into your AI assistant (Cursor, Copilot, Claude, ChatGPT) to fix.
 
 ![The runs inbox with a live Stage → Job → Task timeline expanded and a step's log tailing alongside it.](media/screenshot-timeline.png)
 
@@ -100,3 +101,9 @@ Press **F5** to launch the Extension Development Host.
 
 The Marketplace icon (`media/icon.png`) is generated from `scripts/gen-icon.js` — run
 `node scripts/gen-icon.js` to regenerate it after tweaking the design.
+
+## More from this author
+
+- **[Azure Boards Inbox](https://marketplace.visualstudio.com/items?itemName=danilocolombi.azure-boards-inbox)**
+  — a focused sidebar inbox for your assigned work items, pull requests, and comments, organized by project
+  with live counts and one-click actions.
