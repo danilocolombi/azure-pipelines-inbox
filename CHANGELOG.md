@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Docs: README overhaul — document run-completion notifications and the jump-to-first-error action,
+  introduce the Pipelines view, add an Install section (Marketplace + Open VSX), and place screenshots
+  inline instead of in a standalone gallery.
+
 ## 0.1.0
 
 Initial release.

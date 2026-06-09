@@ -25,22 +25,14 @@ jobs → tasks) and logs update as the run executes. A companion to
   prompt), **cancel** an in-progress run, **re-run** a whole pipeline, or **re-run just the failed jobs**
   of a failed run. The first time you use one, it walks you through a one-time write-token setup; until
   then your sign-in stays read-only.
-- **Notifications** — an optional toast when a tracked run finishes; on failure it links straight to the
-  errors. Defaults to runs you triggered (configurable — see `notifyOnComplete`).
-- **Status bar** — a `▶ N running` / `✖ N failed` summary while the sidebar is closed; click it to jump to
-  the inbox. The failed count clears once you open the Runs view.
 
-It polls only while something is in progress, then goes idle.
-
-## Screenshots
-
-The screenshot above shows a run's live timeline — stages, jobs and tasks update in place, spinning
-while in progress and flipping to pass/fail as they finish.
-
-The tailing log panel, with `##[error]` / `##[warning]` highlighting and the **Copy for AI** /
-**Copy log** actions:
+It polls only while something is in progress, then goes idle. Finished runs surface as a desktop
+notification (configurable via `notifyOnComplete`) and a `▶ N running` / `✖ N failed` status-bar summary
+that jumps you back to the inbox.
 
 ![A step's log tailing in the panel, errors in red and warnings in yellow, with Copy for AI and Copy log buttons in the header.](media/screenshot-logs.png)
+
+*The log panel tailing a step — error/warning highlighting, with **Copy for AI** and **Copy log** in the header.*
 
 ## Install
 
