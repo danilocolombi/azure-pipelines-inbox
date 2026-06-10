@@ -23,9 +23,9 @@ trimmed and with context, into your AI assistant (Cursor, Copilot, Claude, ChatG
   running them directly (see **Run actions**).
 - **Filters** — only my runs, status (all / succeeded / failed), and branch.
 - **Run actions** — **Run** a pipeline (▶ on each pipeline in the Pipelines view, with a branch
-  prompt), **cancel** an in-progress run, **re-run** a whole pipeline, or **re-run just the failed jobs**
-  of a failed run. The first time you use one, it walks you through a one-time write-token setup; until
-  then your sign-in stays read-only.
+  prompt), **cancel** an in-progress run, or — from a run's right-click menu — **re-run** the whole
+  pipeline or **re-run just the failed jobs**. The first time you use one, it walks you through a
+  one-time write-token setup; until then your sign-in stays read-only.
 
 It polls only while something is in progress, then goes idle. Finished runs surface as a desktop
 notification (configurable via `notifyOnComplete`) and a `▶ N running` / `✖ N failed` status-bar summary
@@ -65,7 +65,7 @@ VS Code as well as Cursor, VSCodium, and Windsurf.
 
 ## Run actions (run / cancel / re-run)
 
-The action buttons are always visible, but the extension stays **read-only by default**: the first time
+The actions are always available, but the extension stays **read-only by default**: the first time
 you trigger one, it asks for a Personal Access Token with **Build (Read & Execute)** (a one-time setup —
 this token is a superset of read, so your existing read features keep working). Cancel out and nothing
 changes. You can also do this up front via **Azure Pipelines: Enable Run Actions**.
@@ -75,10 +75,13 @@ The actions:
 - **Run Pipeline** — the ▶ button on each pipeline in the Pipelines view; prompts for a branch (leave it
   empty to run the pipeline's default branch).
 - **Cancel Run** — on an in-progress run.
-- **Re-run Pipeline** — queues a fresh run of the whole pipeline.
-- **Re-run Failed Jobs** — on a failed run; retries only the failed stages in place (the same run goes
-  back to in-progress), like the Azure DevOps web UI's "Rerun failed jobs". Pipelines without stages
-  (classic builds) fall back to a full re-run.
+- **Re-run Pipeline** — right-click a run; queues a fresh run of the whole pipeline.
+- **Re-run Failed Jobs** — right-click a failed run; retries only the failed stages in place (the same
+  run goes back to in-progress), like the Azure DevOps web UI's "Rerun failed jobs". Pipelines without
+  stages (classic builds) fall back to a full re-run.
+
+The re-run actions live in the right-click menu only (no hover buttons), so a stray click on a run row
+can never queue a build.
 
 ## How "live" works
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.3
+
+- **Re-run Pipeline** and **Re-run Failed Jobs** moved from hover buttons to the run's right-click
+  menu. They queue a build immediately with no confirmation, so they no longer sit where a stray
+  click can land; failed rows keep just the read-only **View First Error** and **Open in Browser**
+  hover buttons.
+
+## 0.1.2
+
+- Docs: benefit-led README intro.
+
 ## 0.1.1
 
 - Docs: README overhaul — document run-completion notifications and the jump-to-first-error action,
