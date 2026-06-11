@@ -24,8 +24,9 @@ trimmed and with context, into your AI assistant (Cursor, Copilot, Claude, ChatG
 - **Filters** — only my runs, status (all / succeeded / failed), and branch.
 - **Run actions** — **Run** a pipeline (▶ on each pipeline in the Pipelines view, with a branch
   prompt), **cancel** an in-progress run, or — from a run's right-click menu — **re-run** the whole
-  pipeline or **re-run just the failed jobs**. The first time you use one, it walks you through a
-  one-time write-token setup; until then your sign-in stays read-only.
+  pipeline or **re-run just the failed jobs**. If your token already has the write scope these just
+  work; otherwise the first use walks you through a one-time token upgrade — until then your
+  sign-in stays read-only.
 
 It polls only while something is in progress, then goes idle. Finished runs surface as a desktop
 notification (configurable via `notifyOnComplete`) and a `▶ N running` / `✖ N failed` status-bar summary
@@ -61,14 +62,15 @@ VS Code as well as Cursor, VSCodium, and Windsurf.
 | `azurePipelines.runsTop` | `25` | Max runs listed per project. |
 | `azurePipelines.pollSeconds` | `4` | Poll interval (seconds) for in-progress runs and tailing logs. |
 | `azurePipelines.notifyOnComplete` | `mine` | Notify when a tracked run finishes: `off` / `mine` / `all`. |
-| `azurePipelines.enableActions` | `false` | Enable Cancel / Re-run (prompts for a Build Read & Execute PAT). |
+| `azurePipelines.enableActions` | `false` | Enable Run / Cancel / Re-run (set automatically on first successful action). |
 
 ## Run actions (run / cancel / re-run)
 
-The actions are always available, but the extension stays **read-only by default**: the first time
-you trigger one, it asks for a Personal Access Token with **Build (Read & Execute)** (a one-time setup —
-this token is a superset of read, so your existing read features keep working). Cancel out and nothing
-changes. You can also do this up front via **Azure Pipelines: Enable Run Actions**.
+The actions are always available, but the extension stays **read-only by default**: an action is
+first tried with your current token, so if it already has **Build (Read & Execute)** it just works.
+Only if Azure refuses are you asked for a token with that scope (a one-time setup — the write token
+is a superset of read, so your existing read features keep working). Cancel out and nothing changes.
+You can also do the token upgrade up front via **Azure Pipelines: Enable Run Actions**.
 
 The actions:
 

@@ -156,16 +156,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await updateStatusBar();
   };
 
-  // First-use gate for write actions (run / cancel / re-run). The buttons are always visible
-  // for discoverability; the first time one is used we walk the user through providing a
-  // write-scoped PAT, then continue. This keeps the default sign-in token read-only.
-  const ensureActions = async (): Promise<boolean> => {
-    if (getActionsEnabled()) return true;
-    const ok = await enableActions(auth, client);
-    if (ok) await refreshContext();
-    return ok;
-  };
-
   // Open the first failed step of a run and jump straight to the error in its log.
   const openFirstError = async (node: RunNode): Promise<void> => {
     try {
@@ -337,28 +327,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       copyLog(client, node, 'plain')
     ),
 
+    // Write actions are optimistic — tried with the current token, prompting for a
+    // write-scoped PAT only if Azure refuses (see runWriteAction in commands/actions.ts).
     vscode.commands.registerCommand('azurePipelines.cancelRun', async (node) => {
-      if (!(await ensureActions())) return;
-      if (await cancelRunCommand(client, node)) {
+      if (await cancelRunCommand(auth, client, node)) {
         provider.refresh();
       }
     }),
     vscode.commands.registerCommand('azurePipelines.reRun', async (node) => {
-      if (!(await ensureActions())) return;
-      if (await reRunCommand(client, node)) {
+      if (await reRunCommand(auth, client, node)) {
         provider.refresh();
       }
     }),
     vscode.commands.registerCommand('azurePipelines.reRunFailed', async (node) => {
-      if (!(await ensureActions())) return;
-      if (await reRunFailedCommand(client, node)) {
+      if (await reRunFailedCommand(auth, client, node)) {
         refreshAllTrees();
         poll.ensureRunning();
       }
     }),
     vscode.commands.registerCommand('azurePipelines.runPipeline', async (node) => {
-      if (!(await ensureActions())) return;
-      if (await runPipelineCommand(client, node)) {
+      if (await runPipelineCommand(auth, client, node)) {
         refreshAllTrees();
         poll.ensureRunning();
       }

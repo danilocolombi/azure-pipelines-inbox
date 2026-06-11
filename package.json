@@ -2,7 +2,7 @@
   "name": "azure-pipelines-inbox",
   "displayName": "Azure Pipelines Inbox",
   "description": "Watch your Azure DevOps pipeline runs live from VS Code's sidebar — timeline and logs as they happen.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "danilocolombi",
   "icon": "media/icon.png",
   "engines": {
@@ -457,7 +457,7 @@
         "azurePipelines.enableActions": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Whether run actions (run / cancel / re-run) are enabled. Set automatically the first time you use one of those buttons — which prompts for a Personal Access Token with **Build (Read & Execute)**. Off by default so the extension only needs a read-only token.",
+          "markdownDescription": "Whether run actions (run / cancel / re-run) are enabled. Set automatically the first time one of those actions succeeds — actions are tried with your current token, and you're only prompted for a Personal Access Token with **Build (Read & Execute)** if Azure refuses. Off by default so the extension works with a read-only token.",
           "scope": "application"
         },
         "azurePipelines.notifyOnComplete": {

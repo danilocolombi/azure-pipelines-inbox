@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4
+
+- Run actions no longer show an upfront token-setup dialog. An action is tried with your current
+  token first — if it already has **Build (Read & Execute)** it just works, and run actions are
+  enabled automatically. Only when Azure refuses are you walked through the one-time token upgrade,
+  after which the action is retried. An expired write token now also leads straight into the update
+  prompt instead of a dead-end error.
+
 ## 0.1.3
 
 - **Re-run Pipeline** and **Re-run Failed Jobs** moved from hover buttons to the run's right-click

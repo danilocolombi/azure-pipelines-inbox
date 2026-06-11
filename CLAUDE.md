@@ -84,12 +84,14 @@ anything that changes sign-in, subscriptions, filters, or `enableActions`. Memoi
 `AzureClient` connection and the `cachedUser` in `builds.ts`) must be invalidated on sign-in/out —
 `resetUserCache()` + `client.invalidate()`.
 
-## Run actions are opt-in
+## Run actions are read-only-first
 
-Cancel/re-run are hidden behind the `azurePipelines.enableActions` setting (default false) so the
-extension only needs a read-only PAT by default. The `actionsEnabled` context key gates the menu
-items. Enabling prompts for a write-scoped PAT. Mirror this gating philosophy (read-only by
-default) for any new write operation.
+The extension only needs a read-only PAT by default. Write actions (run/cancel/re-run) are
+always visible but go through `runWriteAction()` in
+[src/commands/actions.ts](src/commands/actions.ts): the call is tried optimistically with the
+current token; success silently flips `azurePipelines.enableActions` (default false), and only an
+unauthorized rejection prompts for a write-scoped PAT (then retries once). Mirror this philosophy
+(read-only by default, prompt only when Azure refuses) for any new write operation.
 
 ## Publishing
 
