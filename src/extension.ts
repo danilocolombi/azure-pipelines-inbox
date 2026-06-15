@@ -36,8 +36,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const auth = new AuthService(context.secrets);
   const client = new AzureClient(auth);
   const stats = new StatsCache();
-  const provider = new RunsTreeProvider(client, stats);
-  const pipelinesProvider = new PipelinesTreeProvider(client, stats);
+  // A rejected PAT in either view raises the shared `azurePipelines.authError` context key,
+  // which swaps that view's tree for the "Update Access Token" welcome panel.
+  const authErrorState = { runs: false, pipelines: false };
+  const updateAuthErrorContext = () =>
+    vscode.commands.executeCommand(
+      'setContext',
+      'azurePipelines.authError',
+      authErrorState.runs || authErrorState.pipelines
+    );
+  const provider = new RunsTreeProvider(client, stats, (hasError) => {
+    authErrorState.runs = hasError;
+    void updateAuthErrorContext();
+  });
+  const pipelinesProvider = new PipelinesTreeProvider(client, stats, (hasError) => {
+    authErrorState.pipelines = hasError;
+    void updateAuthErrorContext();
+  });
   const logPanel = new LogPanel(client);
   const poll = new PollController(provider, logPanel);
   context.subscriptions.push({
@@ -234,6 +249,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await refreshContext();
         refreshAllTrees();
         vscode.window.showInformationMessage('Azure Pipelines: signed in.');
+      }
+    }),
+
+    vscode.commands.registerCommand('azurePipelines.updatePat', async () => {
+      const ok = await auth.promptUpdatePat();
+      if (ok) {
+        client.invalidate();
+        resetUserCache();
+        await refreshContext();
+        refreshAllTrees();
+        vscode.window.showInformationMessage('Azure Pipelines: access token updated.');
       }
     }),
 

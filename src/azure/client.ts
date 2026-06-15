@@ -2,6 +2,9 @@ import * as azdev from 'azure-devops-node-api';
 import { AuthService } from '../auth/authService';
 import { getOrganizationUrl } from '../state/config';
 
+/** Per-request socket timeout (ms). Beyond this a request rejects instead of hanging. */
+const REQUEST_TIMEOUT_MS = 30000;
+
 export class AzureClient {
   private connection: azdev.WebApi | undefined;
   private cachedKey = '';
@@ -23,7 +26,10 @@ export class AzureClient {
     if (this.connection && key === this.cachedKey) return this.connection;
 
     const handler = azdev.getPersonalAccessTokenHandler(pat);
-    this.connection = new azdev.WebApi(orgUrl, handler);
+    // typed-rest-client defaults to no socket timeout, so a request on a dropped/idle
+    // connection (VPN reconnect, laptop sleep/resume mid-run) can hang forever — which
+    // wedges the single poll loop. Cap it so a stuck request rejects and the next tick retries.
+    this.connection = new azdev.WebApi(orgUrl, handler, { socketTimeout: REQUEST_TIMEOUT_MS });
     this.cachedKey = key;
     return this.connection;
   }

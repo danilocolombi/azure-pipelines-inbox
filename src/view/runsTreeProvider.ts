@@ -29,10 +29,14 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
   private projectRuns = new Map<string, ProjectEntry>();
   private timelines = new Map<number, TimelineRecord[]>();
   private signedIn = false;
+  private authError = false;
 
   constructor(
     private readonly client: AzureClient,
-    private readonly stats: StatsCache
+    private readonly stats: StatsCache,
+    /** Reports the bad/expired-PAT state up to the shared `azurePipelines.authError`
+     * context key that drives the "Update Access Token" welcome view. */
+    private readonly onAuthError: (hasError: boolean) => void
   ) {}
 
   setSignedIn(value: boolean): void {
@@ -41,7 +45,16 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
     this._onDidChangeTreeData.fire();
   }
 
+  /** When set, `getChildren` collapses the tree to an empty root so the auth-error
+   * welcome view (with its "Update Access Token" button) can take over. */
+  private setAuthError(value: boolean): void {
+    if (this.authError === value) return;
+    this.authError = value;
+    this.onAuthError(value);
+  }
+
   refresh(): void {
+    this.setAuthError(false);
     this.projectRuns.clear();
     this.timelines.clear();
     this._onDidChangeTreeData.fire();
@@ -65,6 +78,7 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
   async getChildren(element?: Node): Promise<Node[]> {
     if (!element) {
       if (!this.signedIn) return [];
+      if (this.authError) return [];
       const subs = getSubscriptions();
       if (subs.length === 0) return [];
       return subs.map((s) => new ProjectNode(s));
@@ -110,17 +124,14 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
       this._onDidChangeRuns.fire();
       void this.applyEtaBaselines(sub.projectName, runs);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
-      this.projectRuns.set(sub.projectId, { loading: false, error: `Error: ${message}` });
+      // A rejected token is shown once, via the auth-error welcome view (collapses the whole
+      // tree) — not as a per-project error row. Other failures stay scoped to the project.
       if (isUnauthorized(err)) {
-        const choice = await vscode.window.showErrorMessage(
-          'Azure Pipelines: authentication failed. Sign in again?',
-          'Sign In'
-        );
-        if (choice === 'Sign In') {
-          await vscode.commands.executeCommand('azurePipelines.signIn');
-        }
+        this.setAuthError(true);
+      } else {
+        const message =
+          err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
+        this.projectRuns.set(sub.projectId, { loading: false, error: `Error: ${message}` });
       }
     } finally {
       this._onDidChangeTreeData.fire();

@@ -9,9 +9,17 @@ import { RunsTreeProvider } from '../view/runsTreeProvider';
  * the view is hidden. Re-arm it via `ensureRunning()` whenever new activity might exist
  * (after a refresh, on tree expansion, or when a log opens).
  */
+/**
+ * If a tick stays "in progress" longer than this, treat it as wedged (a hung request that
+ * never resolved nor rejected) and let the next tick proceed anyway, so the loop self-heals
+ * instead of freezing for the rest of the session.
+ */
+const TICK_WATCHDOG_MS = 90000;
+
 export class PollController {
   private timer?: NodeJS.Timeout;
   private ticking = false;
+  private tickStartedAt = 0;
   private visible = false;
 
   constructor(
@@ -51,8 +59,12 @@ export class PollController {
   }
 
   private async tick(): Promise<void> {
-    if (this.ticking) return;
+    // Skip if a tick is already running — unless it's been running implausibly long, which
+    // means its awaited request hung (no resolve/reject). In that case the guard would freeze
+    // the loop forever, so we let this tick proceed and re-arm the watchdog.
+    if (this.ticking && Date.now() - this.tickStartedAt < TICK_WATCHDOG_MS) return;
     this.ticking = true;
+    this.tickStartedAt = Date.now();
     try {
       if (this.visible) await this.provider.refreshRunList();
       const runsActive = await this.provider.pollActiveRuns();

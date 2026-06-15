@@ -2,7 +2,7 @@
   "name": "azure-pipelines-inbox",
   "displayName": "Azure Pipelines Inbox",
   "description": "Watch your Azure DevOps pipeline runs live from VS Code's sidebar — timeline and logs as they happen.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "danilocolombi",
   "icon": "media/icon.png",
   "engines": {
@@ -58,6 +58,11 @@
         "when": "azurePipelines.signedIn && azurePipelines.noSubscriptions"
       },
       {
+        "view": "azurePipelines.runs",
+        "contents": "Azure DevOps rejected your access token (401/403). It may have expired or be missing the required scopes.\n[Update Access Token](command:azurePipelines.updatePat)",
+        "when": "azurePipelines.signedIn && azurePipelines.authError"
+      },
+      {
         "view": "azurePipelines.pipelines",
         "contents": "Sign in to your Azure DevOps organization to browse your pipelines.\n[Sign in](command:azurePipelines.signIn)",
         "when": "!azurePipelines.signedIn"
@@ -66,6 +71,11 @@
         "view": "azurePipelines.pipelines",
         "contents": "You're signed in but haven't subscribed to any projects yet.\n[Manage Subscriptions](command:azurePipelines.manageSubscriptions)",
         "when": "azurePipelines.signedIn && azurePipelines.noSubscriptions"
+      },
+      {
+        "view": "azurePipelines.pipelines",
+        "contents": "Azure DevOps rejected your access token (401/403). It may have expired or be missing the required scopes.\n[Update Access Token](command:azurePipelines.updatePat)",
+        "when": "azurePipelines.signedIn && azurePipelines.authError"
       }
     ],
     "commands": [
@@ -77,6 +87,11 @@
       {
         "command": "azurePipelines.signOut",
         "title": "Sign Out",
+        "category": "Azure Pipelines"
+      },
+      {
+        "command": "azurePipelines.updatePat",
+        "title": "Update Access Token",
         "category": "Azure Pipelines"
       },
       {

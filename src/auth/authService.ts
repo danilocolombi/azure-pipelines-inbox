@@ -45,7 +45,9 @@ export class AuthService {
 
     const pat = await vscode.window.showInputBox({
       title: 'Azure DevOps Personal Access Token',
-      prompt: 'Needs Build (Read) and Project and Team (Read) scopes',
+      prompt:
+        'Needs Build (Read) + Project and Team (Read). ' +
+        'To also run, cancel, or re-run pipelines, use Build (Read & Execute) instead.',
       password: true,
       ignoreFocusOut: true,
       validateInput: (v) => (v && v.trim().length > 0 ? null : 'Required')
@@ -53,6 +55,27 @@ export class AuthService {
     if (!pat) return false;
 
     await setOrganizationUrl(orgUrl.trim());
+    await this.setPat(pat.trim());
+    return true;
+  }
+
+  /**
+   * Re-prompt for a (read-scoped) PAT, keeping the existing org URL. Used by the
+   * "Update Access Token" recovery flow when Azure rejects the current token (401/403).
+   * Falls back to full sign-in if no org has ever been set.
+   */
+  async promptUpdatePat(): Promise<boolean> {
+    if (!getOrganizationUrl()) return this.promptSignIn();
+    const pat = await vscode.window.showInputBox({
+      title: 'Azure DevOps Personal Access Token',
+      prompt:
+        'Needs Build (Read) + Project and Team (Read). ' +
+        'To also run, cancel, or re-run pipelines, use Build (Read & Execute) instead.',
+      password: true,
+      ignoreFocusOut: true,
+      validateInput: (v) => (v && v.trim().length > 0 ? null : 'Required')
+    });
+    if (!pat) return false;
     await this.setPat(pat.trim());
     return true;
   }
