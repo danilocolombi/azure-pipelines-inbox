@@ -49,6 +49,14 @@ config-change listener. Trace command flow from there.
   single step's log; opening another step retargets the same panel. Tailing appends from a
   1-based `nextLine` cursor. The webview HTML/JS is inline in this file (CSP + nonce); it
   classifies `##[error|warning|section|command|group|debug]` prefixes for styling.
+- `StatsCache` ([src/azure/stats.ts](src/azure/stats.ts)) — per-definition run-history stats
+  (median "typical" duration, pass rate; nothing below 3 completed runs), shared by both tree
+  providers. Filled for free when the Pipelines view fetches a definition's runs (`seed`) or on
+  demand (`fetch` — TTL-cached, deduped, never throws; stats are decorative). Drives the
+  `running 7m / ~12m` ETA on active runs and the `~12m · 86%` pipeline decorations.
+  `PipelineNode` leaves its tooltip undefined until stats exist so the provider's
+  `resolveTreeItem` fetches them lazily on hover (VS Code only calls it for undefined
+  tooltips). Cleared in `refreshAllTrees()`.
 - `PollController` ([src/poll/pollController.ts](src/poll/pollController.ts)) — see below.
 
 **The "live" model is polling, not push.** Azure DevOps has no public push API. A single

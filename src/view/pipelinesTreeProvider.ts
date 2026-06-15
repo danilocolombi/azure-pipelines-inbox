@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { TimelineRecord } from 'azure-devops-node-api/interfaces/BuildInterfaces';
 import { AzureClient, isUnauthorized } from '../azure/client';
 import { listDefinitionRuns, listDefinitions } from '../azure/builds';
+import { StatsCache } from '../azure/stats';
 import { getOrganizationUrl, getSubscriptions, Subscription } from '../state/config';
 import { MessageNode, Node, PipelineNode, ProjectNode, RunNode, TimelineRecordNode } from './treeItems';
 import { loadRunChildren, recordChildren } from './timeline';
@@ -27,7 +28,10 @@ export class PipelinesTreeProvider implements vscode.TreeDataProvider<Node> {
   private timelines = new Map<number, TimelineRecord[]>();
   private signedIn = false;
 
-  constructor(private readonly client: AzureClient) {}
+  constructor(
+    private readonly client: AzureClient,
+    private readonly stats: StatsCache
+  ) {}
 
   setSignedIn(value: boolean): void {
     if (this.signedIn === value) return;
@@ -43,6 +47,25 @@ export class PipelinesTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   getTreeItem(element: Node): vscode.TreeItem {
+    return element;
+  }
+
+  // PipelineNode leaves its tooltip undefined until stats exist, and VS Code calls this
+  // on hover only for undefined tooltips — so the per-definition history fetch happens
+  // lazily, for the one pipeline being hovered, instead of once per catalog entry.
+  // Returning the resolved element is what VS Code renders into the open hover; do NOT
+  // fire onDidChangeTreeData here — re-rendering the row dismisses the popup mid-hover and
+  // forces the user to hover again. applyStats also refreshes the description, which rides
+  // along on the next natural render.
+  async resolveTreeItem(
+    _item: vscode.TreeItem,
+    element: Node,
+    _token: vscode.CancellationToken
+  ): Promise<vscode.TreeItem> {
+    if (element instanceof PipelineNode && element.tooltip === undefined) {
+      const stats = await this.stats.fetch(this.client, element.projectName, element.definitionId);
+      element.applyStats(stats);
+    }
     return element;
   }
 
@@ -92,7 +115,10 @@ export class PipelinesTreeProvider implements vscode.TreeDataProvider<Node> {
       const orgUrl = getOrganizationUrl();
       const pipelines = defs
         .filter((d) => typeof d.id === 'number')
-        .map((d) => new PipelineNode(sub.projectName, d, orgUrl));
+        .map(
+          (d) =>
+            new PipelineNode(sub.projectName, d, orgUrl, this.stats.peek(sub.projectName, d.id ?? 0))
+        );
       this.projectDefs.set(sub.projectId, { pipelines });
     } catch (err) {
       const message =
@@ -122,6 +148,16 @@ export class PipelinesTreeProvider implements vscode.TreeDataProvider<Node> {
         .filter((b) => typeof b.id === 'number')
         .map((b) => new RunNode(node.projectName, b, orgUrl));
       this.defRuns.set(node.definitionId, runs);
+      // The history was fetched anyway — seed the stats cache for free and decorate the
+      // pipeline row (and any in-progress run's ETA) with it.
+      const stats = this.stats.seed(node.projectName, node.definitionId, builds);
+      if (stats) {
+        node.applyStats(stats);
+        this._onDidChangeTreeData.fire(node);
+        if (stats.typicalMs !== undefined) {
+          for (const r of runs) r.setTypicalMs(stats.typicalMs);
+        }
+      }
       return runs.length > 0 ? runs : [new MessageNode('(no runs)', 'inbox')];
     } catch {
       return [new MessageNode('Could not load runs', 'error')];

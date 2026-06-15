@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { TimelineRecord } from 'azure-devops-node-api/interfaces/BuildInterfaces';
 import { AzureClient, isUnauthorized } from '../azure/client';
 import { getRun, getTimeline, isActiveStatus, listRuns } from '../azure/builds';
+import { StatsCache } from '../azure/stats';
 import { getOrganizationUrl, getSubscriptions, Subscription } from '../state/config';
 import { MessageNode, Node, ProjectNode, RunNode, TimelineRecordNode } from './treeItems';
 import { loadRunChildren, recordChildren } from './timeline';
@@ -29,7 +30,10 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
   private timelines = new Map<number, TimelineRecord[]>();
   private signedIn = false;
 
-  constructor(private readonly client: AzureClient) {}
+  constructor(
+    private readonly client: AzureClient,
+    private readonly stats: StatsCache
+  ) {}
 
   setSignedIn(value: boolean): void {
     if (this.signedIn === value) return;
@@ -104,6 +108,7 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
         .map((b) => new RunNode(sub.projectName, b, orgUrl));
       this.projectRuns.set(sub.projectId, { loading: false, runs });
       this._onDidChangeRuns.fire();
+      void this.applyEtaBaselines(sub.projectName, runs);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
@@ -151,6 +156,7 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
         }
         if (next.length !== entry.runs.length) changed = true; // a run dropped off the top N
         entry.runs = next;
+        void this.applyEtaBaselines(sub.projectName, next);
       } catch {
         // transient; keep the current list and try again next tick
       }
@@ -158,6 +164,29 @@ export class RunsTreeProvider implements vscode.TreeDataProvider<Node> {
     if (changed) {
       this._onDidChangeTreeData.fire();
       this._onDidChangeRuns.fire();
+    }
+  }
+
+  /**
+   * Give every active run its pipeline's typical duration, so the row reads
+   * "running 7m / ~12m". One history fetch per distinct active definition, TTL-cached in
+   * the shared StatsCache (and `fetch` never throws); fire-and-forget — the ETA is
+   * decorative and fills in whenever it arrives.
+   */
+  private async applyEtaBaselines(projectName: string, runs: RunNode[]): Promise<void> {
+    const defIds = new Set<number>();
+    for (const r of runs) {
+      const defId = r.build.definition?.id;
+      if (isActiveStatus(r.build.status) && typeof defId === 'number') defIds.add(defId);
+    }
+    for (const defId of defIds) {
+      const typical = (await this.stats.fetch(this.client, projectName, defId))?.typicalMs;
+      if (typical === undefined) continue;
+      for (const r of runs) {
+        if (r.build.definition?.id === defId && r.setTypicalMs(typical)) {
+          this._onDidChangeTreeData.fire(r);
+        }
+      }
     }
   }
 

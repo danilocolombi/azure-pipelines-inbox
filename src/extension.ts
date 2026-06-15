@@ -3,6 +3,7 @@ import { BuildResult } from 'azure-devops-node-api/interfaces/BuildInterfaces';
 import { AuthService } from './auth/authService';
 import { firstFailedLeaf, getMyId, getTimeline, resetUserCache } from './azure/builds';
 import { AzureClient } from './azure/client';
+import { StatsCache } from './azure/stats';
 import { enableActions } from './commands/actions';
 import { copyLog } from './commands/copyLog';
 import {
@@ -34,8 +35,9 @@ import { RunNode, TimelineRecordNode } from './view/treeItems';
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const auth = new AuthService(context.secrets);
   const client = new AzureClient(auth);
-  const provider = new RunsTreeProvider(client);
-  const pipelinesProvider = new PipelinesTreeProvider(client);
+  const stats = new StatsCache();
+  const provider = new RunsTreeProvider(client, stats);
+  const pipelinesProvider = new PipelinesTreeProvider(client, stats);
   const logPanel = new LogPanel(client);
   const poll = new PollController(provider, logPanel);
   context.subscriptions.push({
@@ -133,6 +135,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   const refreshAllTrees = () => {
+    stats.clear(); // sign-in/out or an explicit refresh should recompute history stats
     provider.refresh();
     pipelinesProvider.refresh();
   };

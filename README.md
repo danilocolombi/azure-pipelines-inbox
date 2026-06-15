@@ -21,6 +21,10 @@ trimmed and with context, into your AI assistant (Cursor, Copilot, Claude, ChatG
   surrounding context so the important part fits the model's window. A plain **Copy log** is there too.
 - **Pipelines view** — a second tree listing every pipeline in your subscribed projects, for browsing and
   running them directly (see **Run actions**).
+- **Run-time insights** — in-progress runs show elapsed vs. typical duration (`running 7m / ~12m`) so you
+  know whether to wait or walk away; each pipeline shows its typical duration and pass rate (with last
+  failure in the tooltip), computed from its recent history. Stats appear once a pipeline has at least
+  3 completed runs.
 - **Filters** — only my runs, status (all / succeeded / failed), and branch.
 - **Run actions** — **Run** a pipeline (▶ on each pipeline in the Pipelines view, with a branch
   prompt), **cancel** an in-progress run, or — from a run's right-click menu — **re-run** the whole

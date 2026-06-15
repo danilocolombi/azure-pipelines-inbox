@@ -9,6 +9,7 @@ import {
   TimelineRecordState
 } from 'azure-devops-node-api/interfaces/BuildInterfaces';
 import { isActiveStatus } from '../azure/builds';
+import { PipelineStats } from '../azure/stats';
 import { Subscription } from '../state/config';
 
 export type Node = ProjectNode | PipelineNode | RunNode | TimelineRecordNode | MessageNode;
@@ -35,7 +36,8 @@ export class PipelineNode extends vscode.TreeItem {
   constructor(
     public readonly projectName: string,
     public readonly definition: BuildDefinitionReference,
-    orgUrl: string
+    orgUrl: string,
+    stats?: PipelineStats
   ) {
     super(definition.name ?? 'Pipeline', vscode.TreeItemCollapsibleState.Collapsed);
     this.definitionId = definition.id ?? 0;
@@ -50,8 +52,30 @@ export class PipelineNode extends vscode.TreeItem {
       ? runIcon(latest)
       : new vscode.ThemeIcon('circle-outline', color('disabledForeground'));
     this.description = latest ? runStatusLabel(latest) : 'no runs yet';
-    const tip = [definition.name ?? 'Pipeline'];
-    if (latest) tip.push(runStatusLabel(latest));
+    // No stats yet → leave tooltip undefined so the provider's resolveTreeItem (which is
+    // only invoked for undefined tooltips) can fetch them lazily on hover.
+    if (stats !== undefined) this.applyStats(stats);
+  }
+
+  /** Fill in run-history stats (description suffix + full tooltip) once they're known. */
+  applyStats(stats: PipelineStats | undefined): void {
+    const latest = this.definition.latestBuild;
+    const parts = [latest ? runStatusLabel(latest) : 'no runs yet'];
+    if (stats?.typicalMs !== undefined) parts.push(`~${formatDuration(stats.typicalMs)}`);
+    if (stats?.passRate !== undefined) parts.push(`${Math.round(stats.passRate * 100)}%`);
+    this.description = parts.join(' · ');
+
+    const tip = [this.definition.name ?? 'Pipeline'];
+    if (latest) tip.push(`Last run: ${runStatusLabel(latest)}`);
+    if (stats?.typicalMs !== undefined) {
+      tip.push(`Typical duration: ~${formatDuration(stats.typicalMs)}`);
+    }
+    if (stats?.passRate !== undefined) {
+      tip.push(
+        `Pass rate: ${Math.round(stats.passRate * 100)}% over the last ${stats.sampleSize} completed runs`
+      );
+    }
+    if (stats?.lastFailure) tip.push(`Last failure: ${ago(stats.lastFailure)}`);
     this.tooltip = new vscode.MarkdownString(tip.join('\n\n'));
   }
 }
@@ -59,6 +83,8 @@ export class PipelineNode extends vscode.TreeItem {
 export class RunNode extends vscode.TreeItem {
   readonly kind = 'run' as const;
   url = '';
+  /** Typical (median) duration of this run's pipeline — shows "running 7m / ~12m" while active. */
+  private typicalMs?: number;
 
   constructor(
     public readonly projectName: string,
@@ -80,13 +106,22 @@ export class RunNode extends vscode.TreeItem {
     this.apply();
   }
 
+  /** Set the ETA baseline; returns whether it changed (so callers know to redraw). */
+  setTypicalMs(ms: number | undefined): boolean {
+    if (this.typicalMs === ms) return false;
+    this.typicalMs = ms;
+    this.apply();
+    return true;
+  }
+
   private apply(): void {
     const b = this.build;
     const defName = b.definition?.name ?? 'Pipeline';
     const number = b.buildNumber ?? `${b.id}`;
     this.label = `${defName} #${number}`;
     const branch = shortenBranch(b.sourceBranch);
-    this.description = branch ? `${runStatusLabel(b)} · ${branch}` : runStatusLabel(b);
+    const status = runStatusLabel(b, this.typicalMs);
+    this.description = branch ? `${status} · ${branch}` : status;
     this.iconPath = runIcon(b);
     this.contextValue = isActiveStatus(b.status)
       ? 'run.active'
@@ -96,6 +131,9 @@ export class RunNode extends vscode.TreeItem {
     this.url = `${this.orgUrl}/${encodeURIComponent(this.projectName)}/_build/results?buildId=${b.id}`;
 
     const tip: string[] = [`${defName} #${number}`, runStatusLabel(b)];
+    if (isActiveStatus(b.status) && this.typicalMs !== undefined) {
+      tip.push(`Typical duration: ~${formatDuration(this.typicalMs)}`);
+    }
     if (b.sourceBranch) tip.push(`Branch: ${shortenBranch(b.sourceBranch)}`);
     if (b.requestedFor?.displayName) tip.push(`Triggered by: ${b.requestedFor.displayName}`);
     this.tooltip = new vscode.MarkdownString(tip.join('\n\n'));
@@ -224,10 +262,14 @@ function taskResultIcon(result: TaskResult | undefined): vscode.ThemeIcon {
   }
 }
 
-function runStatusLabel(b: Build): string {
+function runStatusLabel(b: Build, typicalMs?: number): string {
   switch (b.status) {
-    case BuildStatus.InProgress:
-      return b.startTime ? `running ${elapsed(b.startTime)}` : 'running';
+    case BuildStatus.InProgress: {
+      if (!b.startTime) return 'running';
+      const el = elapsed(b.startTime);
+      // Elapsed vs. typical reads naturally even when the run overshoots ("14m / ~12m").
+      return typicalMs !== undefined ? `running ${el} / ~${formatDuration(typicalMs)}` : `running ${el}`;
+    }
     case BuildStatus.Cancelling:
       return 'cancelling';
     case BuildStatus.NotStarted:
@@ -282,6 +324,16 @@ export function shortenBranch(ref: string | undefined): string {
 
 function elapsed(start: Date): string {
   return formatDuration(Date.now() - new Date(start).getTime());
+}
+
+function ago(d: Date): string {
+  const ms = Date.now() - d.getTime();
+  const days = Math.floor(ms / 86_400_000);
+  if (days >= 1) return `${days}d ago`;
+  const h = Math.floor(ms / 3_600_000);
+  if (h >= 1) return `${h}h ago`;
+  const m = Math.floor(ms / 60_000);
+  return m >= 1 ? `${m}m ago` : 'just now';
 }
 
 function span(start: Date, end: Date): string {
