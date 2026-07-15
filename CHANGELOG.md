@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8
+
+- **Dependency updates**: azure-devops-node-api 15, TypeScript 6, ESLint 10 (flat config).
+  No user-facing changes.
+
 ## 0.1.7
 
 - **README**: link to the new companion extension
