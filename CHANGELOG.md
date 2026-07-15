@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7
+
+- **README**: link to the new companion extension
+  **[Azure Pull Requests Inbox](https://marketplace.visualstudio.com/items?itemName=danilocolombi.azure-pull-requests-inbox)**
+  — your team's pull requests in the sidebar, with the ones that need your review pinned on top.
+- Dev-dependency update (esbuild 0.28). No functional changes.
+
 ## 0.1.4
 
 - Run actions no longer show an upfront token-setup dialog. An action is tried with your current
