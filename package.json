@@ -2,7 +2,7 @@
   "name": "azure-pipelines-inbox",
   "displayName": "Azure Pipelines Inbox",
   "description": "Watch your Azure DevOps pipeline runs live from VS Code's sidebar — timeline and logs as they happen.",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "danilocolombi",
   "icon": "media/icon.png",
   "engines": {
