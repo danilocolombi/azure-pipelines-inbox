@@ -114,5 +114,9 @@ The Marketplace icon (`media/icon.png`) is generated from `scripts/gen-icon.js` 
 ## More from this author
 
 - **[Azure Boards Inbox](https://marketplace.visualstudio.com/items?itemName=danilocolombi.azure-boards-inbox)**
-  — a focused sidebar inbox for your assigned work items, pull requests, and comments, organized by project
+  — a focused sidebar inbox for your assigned work items and their comments, organized by project
   with live counts and one-click actions.
+- **[Azure Pull Requests Inbox](https://marketplace.visualstudio.com/items?itemName=danilocolombi.azure-pull-requests-inbox)**
+  — your team's pull requests in the sidebar, with the ones that need your review pinned on top:
+  native side-by-side diffs, conversation threads with reply, voting and merging from the editor,
+  and one-click AI review.
