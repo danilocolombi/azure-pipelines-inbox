@@ -499,18 +499,18 @@
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "compile": "tsc --noEmit",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src"
   },
   "dependencies": {
-    "azure-devops-node-api": "^14.0.2"
+    "azure-devops-node-api": "^15.1.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.90.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
     "esbuild": "^0.28.1",
-    "eslint": "^8.57.0",
-    "typescript": "^5.4.0"
+    "eslint": "^10.7.0",
+    "typescript": "<6.1",
+    "typescript-eslint": "^8.64.0"
   }
 }
